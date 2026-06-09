@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Catch-all Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helpers definition
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    // Media item validation helper
+    function isValidMediaItem(data) {
+      return data.keys().hasAll(['id', 'type', 'url', 'author', 'timestamp'])
+        && data.id is string
+        && data.type is string
+        && (data.type == 'image' || data.type == 'video')
+        && data.url is string
+        && data.url.size() < 1048576  // Max size for base64 / URL strings
+        && data.author is string
+        && (data.author == 'მაკო' || data.author == 'გეწო' || data.author == 'ქეთა')
+        && data.timestamp is number;
+    }
+
+    // Album validation helper
+    function isValidAlbum(data) {
+      return data.keys().hasAll(['id', 'name'])
+        && data.id is string
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 100;
+    }
+
+    // 2. Specific collection matches for სასტაwe
+    match /artifacts/aca827d1-0ec1-4bd2-a5c8-c03863f408a8/public/data/media/{mediaId} {
+      allow read: if true;
+      allow create: if isValidId(mediaId) && isValidMediaItem(request.resource.data);
+      allow update: if isValidId(mediaId) && isValidMediaItem(request.resource.data);
+      allow delete: if isValidId(mediaId);
+    }
+
+    match /artifacts/aca827d1-0ec1-4bd2-a5c8-c03863f408a8/public/data/albums/{albumId} {
+      allow read: if true;
+      allow create: if isValidId(albumId) && isValidAlbum(request.resource.data);
+      allow update: if isValidId(albumId) && isValidAlbum(request.resource.data);
+      allow delete: if isValidId(albumId);
+    }
+  }
+}
