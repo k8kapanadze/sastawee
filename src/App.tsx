@@ -1,3 +1,8 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   motion, 
@@ -42,7 +47,9 @@ import {
   loadAlbums, 
   saveAlbum, 
   deleteAlbum, 
-  isFirebaseEnabled 
+  isFirebaseEnabled,
+  subscribeMedia,
+  subscribeAlbums
 } from './firebase';
 
 export default function App() {
@@ -115,21 +122,49 @@ export default function App() {
   const [uploadTargetAlbumId, setUploadTargetAlbumId] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load initially
+  // Load initially with real-time updates
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const loadedMedia = await loadMedia();
-        const loadedAlbums = await loadAlbums();
+    let mediaLoaded = false;
+    let albumsLoaded = false;
+
+    const unsubscribeMedia = subscribeMedia(
+      (loadedMedia) => {
         setMedia(loadedMedia);
-        setAlbums(loadedAlbums);
-      } catch (err) {
-        console.error("Error loading gallery data:", err);
-      } finally {
+        mediaLoaded = true;
+        if (mediaLoaded && albumsLoaded) {
+          setLoading(false);
+        }
+      },
+      (err) => {
+        console.error("Error subscribing to media:", err);
         setLoading(false);
       }
-    }
-    fetchData();
+    );
+
+    const unsubscribeAlbums = subscribeAlbums(
+      (loadedAlbums) => {
+        setAlbums(loadedAlbums);
+        albumsLoaded = true;
+        if (mediaLoaded && albumsLoaded) {
+          setLoading(false);
+        }
+      },
+      (err) => {
+        console.error("Error subscribing to albums:", err);
+        setLoading(false);
+      }
+    );
+
+    // Fallback if loading is stuck
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 3000);
+
+    return () => {
+      unsubscribeMedia();
+      unsubscribeAlbums();
+      clearTimeout(timer);
+    };
   }, []);
 
   // Sync to database and state helper
@@ -533,7 +568,7 @@ export default function App() {
   };
 
   return (
-    <div id="app_root" className="min-h-screen bg-black text-white selection:bg-neutral-800 selection:text-white flex flex-col font-sans transition-colors duration-500">
+    <div id="app_root" className="min-h-screen w-full overflow-x-hidden bg-black text-white selection:bg-neutral-800 selection:text-white flex flex-col font-sans transition-colors duration-500">
       
       {/* SECTION 3.1: LOGIN GATE (ავტორიზაცია) OVERLAY */}
       <AnimatePresence>
@@ -615,9 +650,6 @@ export default function App() {
                 <span className="font-sans font-medium tracking-widest text-base sm:text-lg uppercase text-white/90">
                   სასტაwe
                 </span>
-                <span className="hidden min-[380px]:inline-block text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded-full text-neutral-400 font-sans tracking-wide">
-                  კოლაჟი
-                </span>
               </div>
 
               {/* ACTION LINKS / SELECT BUTTON */}
@@ -671,7 +703,7 @@ export default function App() {
                   }`}
                 >
                   <Sliders size={11} />
-                  <span>{selectMode ? 'მონიშნულია' : 'მონიშვნა'}</span>
+                  <span className="hidden sm:inline">{selectMode ? 'მონიშნულია' : 'მონიშვნა'}</span>
                 </button>
 
                 {selectMode && (
@@ -685,25 +717,11 @@ export default function App() {
                     }`}
                   >
                     <Check size={11} />
-                    <span>
-                      {isAllSelected ? 'მოხსნა' : (
-                        <span className="inline-flex items-center">
-                          ყველა
-                          <span className="hidden min-[450px]:inline ml-1">(all)</span>
-                        </span>
-                      )}
+                    <span className="hidden xs:inline">
+                      {isAllSelected ? 'მოხსნა' : 'ყველა'}
                     </span>
                   </button>
                 )}
-
-                <button 
-                  id="action_logout"
-                  onClick={handleLogout}
-                  title="გამოსვლა"
-                  className="p-1.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white rounded-md transition-colors"
-                >
-                  <LogOut size={16} />
-                </button>
               </div>
             </div>
           </header>
@@ -1073,8 +1091,19 @@ export default function App() {
               id="upload_trigger"
               onClick={() => setUploadDrawerOpen(true)}
               className="w-9 h-9 flex items-center justify-center bg-white text-black active:bg-neutral-200 transition-colors rounded-full"
+              title="ატვირთვა"
             >
               <Plus size={16} />
+            </button>
+
+            {/* Logout/Exit action circle badge */}
+            <button
+              id="action_logout_bottom"
+              onClick={handleLogout}
+              title="გამოსვლა"
+              className="w-9 h-9 flex items-center justify-center bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-850 rounded-full transition-colors"
+            >
+              <LogOut size={14} />
             </button>
           </nav>
 
@@ -1243,7 +1272,7 @@ export default function App() {
                       required
                       value={newAlbumName}
                       onChange={(e) => setNewAlbumName(e.target.value)}
-                      placeholder="მაგ: ზაფხული 2026, საოჯახო"
+                      placeholder="შენ დაუკარ"
                       className="w-full bg-[#1c1c1e] border border-neutral-900 text-sm font-sans py-3.5 px-4 focus:outline-none focus:border-neutral-700/60 rounded-xl"
                     />
 
@@ -1486,10 +1515,11 @@ export default function App() {
                     ) : (
                       <motion.div
                         key={`lightbox-img-${lightboxIndex}`}
-                        drag={zoomScale === 1 ? "x" : false}
-                        dragConstraints={{ left: 0, right: 0 }}
-                        dragElastic={0.4}
+                        drag={zoomScale === 1 ? "x" : true}
+                        dragConstraints={zoomScale === 1 ? { left: 0, right: 0 } : undefined}
+                        dragElastic={zoomScale === 1 ? 0.4 : 0.05}
                         onDragEnd={(event, info) => {
+                          if (zoomScale > 1) return;
                           const swipeThreshold = 50;
                           if (info.offset.x < -swipeThreshold) {
                             handleNextLightbox();

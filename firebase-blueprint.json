@@ -1,0 +1,68 @@
+{
+  "entities": {
+    "MediaItem": {
+      "title": "MediaItem",
+      "description": "A single photo or video item in the gallery",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the media item"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["image", "video"],
+          "description": "Format type of the media"
+        },
+        "url": {
+          "type": "string",
+          "description": "Hosting URL or base64 uncompressed raw data of the photo/video"
+        },
+        "author": {
+          "type": "string",
+          "enum": ["მაკო", "გეწო", "ქეთა"],
+          "description": "Georgia authorized family author of the media file"
+        },
+        "albumId": {
+          "type": "string",
+          "description": "The album key reference if associated with a custom album collection"
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "Epoch timestamp of media declaration"
+        }
+      },
+      "required": ["id", "type", "url", "author", "timestamp"]
+    },
+    "Album": {
+      "title": "Album",
+      "description": "A physical album containing selected media entries",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the album"
+        },
+        "name": {
+          "type": "string",
+          "description": "Localized Georgian name of the album"
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "Epoch timestamp of album construction"
+        }
+      },
+      "required": ["id", "name"]
+    }
+  },
+  "firestore": {
+    "artifacts/aca827d1-0ec1-4bd2-a5c8-c03863f408a8/public/data/media/{mediaId}": {
+      "schema": "MediaItem",
+      "description": "Collection of gallery media items"
+    },
+    "artifacts/aca827d1-0ec1-4bd2-a5c8-c03863f408a8/public/data/albums/{albumId}": {
+      "schema": "Album",
+      "description": "Collection of photo albums"
+    }
+  }
+}

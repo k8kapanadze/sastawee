@@ -1,3 +1,8 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 export type MediaType = 'image' | 'video';
 
 export type AuthorType = 'ყველა' | 'მაკო' | 'გეწო' | 'ქეთა';
