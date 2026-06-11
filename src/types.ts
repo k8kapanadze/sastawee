@@ -5,11 +5,11 @@ export type AuthorType = 'ყველა' | 'მაკო' | 'გეწო' | '
 export interface MediaItem {
   id: string;
   type: MediaType;
-  url: string;
+  url: string; // Original URL or base64 uncompressed raw data
   author: 'მაკო' | 'გეწო' | 'ქეთა';
   albumId: string | null;
   timestamp: number;
-  isTemp?: boolean;
+  isTemp?: boolean; // Flag for instant pre-rendering
 }
 
 export interface Album {

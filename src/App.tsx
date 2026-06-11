@@ -17,11 +17,14 @@ import {
   Play, 
   Pause, 
   Maximize2, 
+  Minimize2,
   Check, 
   Image as ImageIcon, 
   Video as VideoIcon, 
   LogOut,
-  Sliders
+  Sliders,
+  Grid,
+  Minus
 } from 'lucide-react';
 
 import { 
@@ -79,6 +82,12 @@ export default function App() {
   const [zoomScale, setZoomScale] = useState<number>(1);
   const touchStartRef = useRef<{ dist: number; scale: number }>({ dist: 0, scale: 1 });
 
+  // Grid density and Lightbox rendering states
+  const [gridCols, setGridCols] = useState<number>(3);
+  const [lightboxAspectFill, setLightboxAspectFill] = useState<boolean>(false);
+  const [showLightboxUI, setShowLightboxUI] = useState<boolean>(true);
+  const gridTouchStartRef = useRef<{ dist: number; cols: number }>({ dist: 0, cols: 3 });
+
   const getAuthorInitial = (authorName: string): string => {
     if (!authorName) return '';
     const clean = authorName.trim();
@@ -90,6 +99,8 @@ export default function App() {
 
   useEffect(() => {
     setZoomScale(1);
+    setShowLightboxUI(true);
+    setLightboxAspectFill(false);
   }, [lightboxIndex]);
   
   // Cinematic Slideshow states
@@ -488,6 +499,39 @@ export default function App() {
   const col1 = currentFilteredList.filter((_, idx) => idx % 2 === 0);
   const col2 = currentFilteredList.filter((_, idx) => idx % 2 === 1);
 
+  // Check if everything on display is currently selected
+  const isAllSelected = (() => {
+    if (currentSection === 'albums') {
+      return albums.length > 0 && albums.every(album => selectedAlbumIds.includes(album.id));
+    } else {
+      return currentFilteredList.length > 0 && currentFilteredList.every(item => selectedMediaIds.includes(item.id));
+    }
+  })();
+
+  const handleToggleSelectAll = () => {
+    if (currentSection === 'albums') {
+      if (isAllSelected) {
+        // Deselect all albums currently displayed
+        const albumIdsToRemove = albums.map(a => a.id);
+        setSelectedAlbumIds(prev => prev.filter(id => !albumIdsToRemove.includes(id)));
+      } else {
+        // Select all albums (union with existing)
+        const allAlbumIds = albums.map(a => a.id);
+        setSelectedAlbumIds(prev => Array.from(new Set([...prev, ...allAlbumIds])));
+      }
+    } else {
+      if (isAllSelected) {
+        // Deselect all media items of the current filtered list
+        const mediaIdsToRemove = currentFilteredList.map(m => m.id);
+        setSelectedMediaIds(prev => prev.filter(id => !mediaIdsToRemove.includes(id)));
+      } else {
+        // Select all media items of the current filtered list (union with existing)
+        const allMediaIds = currentFilteredList.map(m => m.id);
+        setSelectedMediaIds(prev => Array.from(new Set([...prev, ...allMediaIds])));
+      }
+    }
+  };
+
   return (
     <div id="app_root" className="min-h-screen bg-black text-white selection:bg-neutral-800 selection:text-white flex flex-col font-sans transition-colors duration-500">
       
@@ -562,49 +606,95 @@ export default function App() {
             <div className="max-w-5xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
               
               {/* BRAND / RESET FILTERS BAR */}
-              <div className="flex items-center space-x-3 cursor-pointer" onClick={() => {
+              <div className="flex items-center space-x-2 sm:space-x-3 cursor-pointer" onClick={() => {
                 setCurrentSection('gallery');
                 setSelectedAlbumId(null);
                 setSelectedAuthorFilter('ყველა');
                 setSelectMode(false);
               }}>
-                <span className="font-sans font-medium tracking-widest text-lg uppercase text-white/90">
+                <span className="font-sans font-medium tracking-widest text-base sm:text-lg uppercase text-white/90">
                   სასტაwe
                 </span>
-                <span className="text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded-full text-neutral-400 font-sans tracking-wide">
+                <span className="hidden min-[380px]:inline-block text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded-full text-neutral-400 font-sans tracking-wide">
                   კოლაჟი
                 </span>
               </div>
 
               {/* ACTION LINKS / SELECT BUTTON */}
-              <div className="flex items-center space-x-3 font-medium">
-                {currentFilteredList.length > 0 && (
+              <div className="flex items-center space-x-1.5 sm:space-x-3 font-medium">
+                {(currentSection === 'gallery' || currentSection === 'albumView') && currentFilteredList.length > 0 && (
+                  <div className="flex items-center bg-neutral-900 px-1 py-1 rounded-md border border-neutral-800/60 select-none">
+                    <button 
+                      onClick={() => setGridCols(prev => Math.min(6, prev + 1))}
+                      className="p-1 hover:text-white text-neutral-400 active:scale-95 disabled:opacity-20 transition-all"
+                      disabled={gridCols >= 6} 
+                      title="სურათების დაპატარავება"
+                    >
+                      <Minus size={11} />
+                    </button>
+                    <span className="text-[10px] font-mono font-bold text-neutral-400 w-4 text-center select-none">
+                      {gridCols}
+                    </span>
+                    <button 
+                      onClick={() => setGridCols(prev => Math.max(2, prev - 1))}
+                      className="p-1 hover:text-white text-neutral-400 active:scale-95 disabled:opacity-20 transition-all"
+                      disabled={gridCols <= 2}
+                      title="სურათების გადიდება"
+                    >
+                      <Plus size={11} />
+                    </button>
+                  </div>
+                )}
+
+                {currentFilteredList.length > 0 && !selectMode && (
                   <button 
                     id="slideshow_launcher"
                     onClick={() => handleOpenSlideshow(currentFilteredList)}
-                    className="flex items-center space-x-1.5 px-3 py-1.5 bg-neutral-900 hover:bg-neutral-850 text-xs uppercase tracking-wider text-neutral-300 transition-all rounded-md"
+                    className="flex items-center space-x-1 sm:space-x-1.5 px-2 py-1.5 sm:px-3 sm:py-1.5 bg-neutral-900 hover:bg-neutral-850 text-[11px] sm:text-xs uppercase tracking-wider text-neutral-300 transition-all rounded-md"
                   >
-                    <Play size={12} className="text-white bg-white/10 p-0.5 rounded" />
+                    <Play size={11} className="text-white bg-white/10 p-0.5 rounded" />
                     <span className="hidden sm:inline">სლაიდშოუ</span>
                   </button>
                 )}
 
                 <button 
-                  id="select_mode_toggle"
+                   id="select_mode_toggle"
                   onClick={() => {
                     setSelectMode(!selectMode);
                     setSelectedMediaIds([]);
                     setSelectedAlbumIds([]);
                   }}
-                  className={`px-3 py-1.5 text-xs uppercase tracking-wider transition-all rounded-md flex items-center space-x-1.5 ${
+                  className={`px-2 py-1.5 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs uppercase tracking-wider transition-all rounded-md flex items-center space-x-1 sm:space-x-1.5 ${
                     selectMode 
                       ? 'bg-white text-black hover:bg-white/90' 
                       : 'bg-neutral-900 hover:bg-neutral-850 text-neutral-300'
                   }`}
                 >
-                  <Sliders size={12} />
+                  <Sliders size={11} />
                   <span>{selectMode ? 'მონიშნულია' : 'მონიშვნა'}</span>
                 </button>
+
+                {selectMode && (
+                  <button 
+                    id="select_all_toggle"
+                    onClick={handleToggleSelectAll}
+                    className={`px-2 py-1.5 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs uppercase tracking-wider transition-all rounded-md flex items-center space-x-1 sm:space-x-1.5 ${
+                      isAllSelected 
+                        ? 'bg-[#1a1a1a] border border-white/20 text-white hover:bg-neutral-800' 
+                        : 'bg-neutral-900 hover:bg-neutral-850 text-neutral-300 border border-neutral-850'
+                    }`}
+                  >
+                    <Check size={11} />
+                    <span>
+                      {isAllSelected ? 'მოხსნა' : (
+                        <span className="inline-flex items-center">
+                          ყველა
+                          <span className="hidden min-[450px]:inline ml-1">(all)</span>
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                )}
 
                 <button 
                   id="action_logout"
@@ -673,7 +763,7 @@ export default function App() {
                 </div>
               ) : currentSection === 'gallery' || currentSection === 'albumView' ? (
                 
-                /* SECTION 2.3: FLUID MASONRY FEED WITH TALL CARD ASPECTS */
+                /* SECTION 2.3: FLUID DENSITY FEED WITH IDEAL SQUARE CROPPING */
                 <motion.div 
                   key="masonry_feed"
                   initial={{ opacity: 0 }}
@@ -689,146 +779,111 @@ export default function App() {
                       </p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-1">
-                      
-                      {/* Flex Column 1 (#col1) */}
-                      <div id="col1" className="flex flex-col gap-1">
-                        {col1.map((item, index) => {
-                          const ogIndex = currentFilteredList.findIndex(m => m.id === item.id);
-                          const isSelected = selectedMediaIds.includes(item.id);
+                    <div 
+                      className="grid gap-1 select-none" 
+                      style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}
+                      onTouchStart={(e) => {
+                        if (e.touches.length === 2) {
+                           const t1 = e.touches[0];
+                           const t2 = e.touches[1];
+                           const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+                           gridTouchStartRef.current = { dist, cols: gridCols };
+                        }
+                      }}
+                      onTouchMove={(e) => {
+                        if (e.touches.length === 2 && gridTouchStartRef.current.dist > 0) {
+                          // Prevent scroll only when gesturing
+                          e.preventDefault();
+                          const t1 = e.touches[0];
+                          const t2 = e.touches[1];
+                          const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+                          const ratio = dist / gridTouchStartRef.current.dist;
+                          
+                          // Fingers moving apart -> zooming in -> less columns count (larger)
+                          if (ratio > 1.25 && gridTouchStartRef.current.cols > 2) {
+                            const newCols = Math.max(2, gridTouchStartRef.current.cols - 1);
+                            setGridCols(newCols);
+                            gridTouchStartRef.current.dist = dist;
+                            gridTouchStartRef.current.cols = newCols;
+                          }
+                          // Fingers close together -> zooming out -> more columns count (smaller)
+                          else if (ratio < 0.75 && gridTouchStartRef.current.cols < 6) {
+                            const newCols = Math.min(6, gridTouchStartRef.current.cols + 1);
+                            setGridCols(newCols);
+                            gridTouchStartRef.current.dist = dist;
+                            gridTouchStartRef.current.cols = newCols;
+                          }
+                        }
+                      }}
+                      onTouchEnd={() => {
+                        gridTouchStartRef.current.dist = 0;
+                      }}
+                    >
+                      {currentFilteredList.map((item, index) => {
+                        const isSelected = selectedMediaIds.includes(item.id);
 
-                          return (
-                            <div 
-                              key={item.id}
-                              id={`card-${item.id}`}
-                              onClick={() => {
-                                if (selectMode) {
-                                  toggleSelectMedia(item.id);
-                                } else {
-                                  handleOpenLightbox(ogIndex, currentFilteredList);
-                                }
-                              }}
-                              className="aspect-[3/4] w-full overflow-hidden relative cursor-pointer bg-neutral-950 rounded-none group select-none"
-                            >
-                              {/* Selection overlay indicator */}
-                              {selectMode && (
-                                <div className="absolute top-2 left-2 z-10 w-5 h-5 flex items-center justify-center rounded-full border border-white/20 bg-black/60 backdrop-blur-md">
-                                  {isSelected && <Check size={12} className="text-white" />}
-                                </div>
-                              )}
+                        return (
+                          <div 
+                            key={item.id}
+                            id={`card-${item.id}`}
+                            onClick={() => {
+                              if (selectMode) {
+                                toggleSelectMedia(item.id);
+                              } else {
+                                handleOpenLightbox(index, currentFilteredList);
+                              }
+                            }}
+                            className="aspect-square w-full overflow-hidden relative cursor-pointer bg-neutral-950 rounded-none group select-none"
+                          >
+                            {/* Selection overlay indicator */}
+                            {selectMode && (
+                              <div className="absolute top-2 left-2 z-10 w-5 h-5 flex items-center justify-center rounded-full border border-white/20 bg-black/60 backdrop-blur-md">
+                                {isSelected && <Check size={12} className="text-white" />}
+                              </div>
+                            )}
 
-                              {/* Media element with force hardware accelerated render layers */}
-                              {item.type === 'video' ? (
-                                <div className="w-full h-full relative" style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}>
-                                  <video 
-                                    src={item.url} 
-                                    className="w-full h-full object-cover"
-                                    muted 
-                                    loop 
-                                    playsInline
-                                    onMouseEnter={(e) => e.currentTarget.play()}
-                                    onMouseLeave={(e) => {
-                                      e.currentTarget.pause();
-                                      e.currentTarget.currentTime = 0;
-                                    }}
-                                  />
-                                  <div className="absolute bottom-2 right-2 bg-black/60 p-1 backdrop-blur-md rounded-md">
-                                    <VideoIcon size={12} className="text-neutral-400" />
-                                  </div>
-                                </div>
-                              ) : (
-                                <img 
+                            {/* Media element with force hardware accelerated render layers */}
+                            {item.type === 'video' ? (
+                              <div className="w-full h-full relative" style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}>
+                                <video 
                                   src={item.url} 
-                                  alt={`Media item by ${item.author}`}
-                                  referrerPolicy="no-referrer"
-                                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                  style={{ 
-                                    willChange: 'transform, opacity', 
-                                    transform: 'translateZ(0)' 
+                                  className="w-full h-full object-cover"
+                                  muted 
+                                  loop 
+                                  playsInline
+                                  onMouseEnter={(e) => e.currentTarget.play()}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.pause();
+                                    e.currentTarget.currentTime = 0;
                                   }}
                                 />
-                              )}
-
-                              {/* Author initial badge inside grid cards */}
-                              <div className="absolute bottom-3 left-3 z-10 w-5 h-5 rounded-full bg-black text-white flex items-center justify-center text-[10px] font-sans font-bold tracking-normal shadow-md select-none border border-white/10">
-                                {getAuthorInitial(item.author)}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Flex Column 2 (#col2) */}
-                      <div id="col2" className="flex flex-col gap-1">
-                        {col2.map((item, index) => {
-                          const ogIndex = currentFilteredList.findIndex(m => m.id === item.id);
-                          const isSelected = selectedMediaIds.includes(item.id);
-
-                          return (
-                            <div 
-                              key={item.id}
-                              id={`card-${item.id}`}
-                              onClick={() => {
-                                if (selectMode) {
-                                  toggleSelectMedia(item.id);
-                                } else {
-                                  handleOpenLightbox(ogIndex, currentFilteredList);
-                                }
-                              }}
-                              className="aspect-[3/4] w-full overflow-hidden relative cursor-pointer bg-neutral-950 rounded-none group select-none"
-                            >
-                              {/* Selection overlay indicator */}
-                              {selectMode && (
-                                <div className="absolute top-2 left-2 z-10 w-5 h-5 flex items-center justify-center rounded-full border border-white/20 bg-black/60 backdrop-blur-md">
-                                  {isSelected && <Check size={12} className="text-white" />}
+                                <div className="absolute bottom-2 right-2 bg-black/60 p-1 backdrop-blur-md rounded-md">
+                                  <VideoIcon size={12} className="text-neutral-400" />
                                 </div>
-                              )}
-
-                              {/* Media element with force hardware accelerated render layers */}
-                              {item.type === 'video' ? (
-                                <div className="w-full h-full relative" style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}>
-                                  <video 
-                                    src={item.url} 
-                                    className="w-full h-full object-cover"
-                                    muted 
-                                    loop 
-                                    playsInline
-                                    onMouseEnter={(e) => e.currentTarget.play()}
-                                    onMouseLeave={(e) => {
-                                      e.currentTarget.pause();
-                                      e.currentTarget.currentTime = 0;
-                                    }}
-                                  />
-                                  <div className="absolute bottom-2 right-2 bg-black/60 p-1 backdrop-blur-md rounded-md">
-                                    <VideoIcon size={12} className="text-neutral-400" />
-                                  </div>
-                                </div>
-                              ) : (
-                                <img 
-                                  src={item.url} 
-                                  alt={`Media item by ${item.author}`}
-                                  referrerPolicy="no-referrer"
-                                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                  style={{ 
-                                    willChange: 'transform, opacity', 
-                                    transform: 'translateZ(0)' 
-                                  }}
-                                />
-                              )}
-
-                              {/* Author initial badge inside grid cards */}
-                              <div className="absolute bottom-3 left-3 z-10 w-5 h-5 rounded-full bg-black text-white flex items-center justify-center text-[10px] font-sans font-bold tracking-normal shadow-md select-none border border-white/10">
-                                {getAuthorInitial(item.author)}
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                            ) : (
+                              <img 
+                                src={item.url} 
+                                alt={`Media item by ${item.author}`}
+                                referrerPolicy="no-referrer"
+                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                style={{ 
+                                  willChange: 'transform, opacity', 
+                                  transform: 'translateZ(0)' 
+                                }}
+                              />
+                            )}
 
+                            {/* Author initial badge inside grid cards */}
+                            <div className="absolute bottom-2 left-2 z-10 w-5 h-5 rounded-full bg-black text-white flex items-center justify-center text-[10px] font-sans font-bold tracking-normal shadow-md select-none border border-white/10">
+                              {getAuthorInitial(item.author)}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </motion.div>
-
               ) : (
 
                 /* SECTION 3.3: ALBUMS CATALOG TAB */
@@ -1112,13 +1167,13 @@ export default function App() {
 
                     {/* Pre-select Target Album folder */}
                     <div className="space-y-2">
-                      <span className="text-[11px] text-neutral-500 font-mono uppercase tracking-wider block">გადამისამართება ალბომში (სურვილისამებრ)</span>
+                      <span className="text-[11px] text-neutral-500 font-mono uppercase tracking-wider block">გადამისამართება ალბომში</span>
                       <select
                         value={uploadTargetAlbumId}
                         onChange={(e) => setUploadTargetAlbumId(e.target.value)}
                         className="w-full bg-[#1c1c1e] border border-neutral-900 text-xs font-sans py-3.5 px-4 focus:outline-none focus:border-white/20 rounded-xl"
                       >
-                        <option value="">გალერეის სექცია (უმისამართო)</option>
+                        <option value="">გალერეის სექცია (გალერეა)</option>
                         {albums.map(a => (
                           <option key={a.id} value={a.id}>{a.name}</option>
                         ))}
@@ -1320,24 +1375,48 @@ export default function App() {
             {lightboxIndex !== null && activeMediaList.length > 0 && (
               <motion.div 
                 id="lightbox_portal"
-                className="fixed inset-0 z-50 bg-black flex flex-col justify-between"
+                className="fixed inset-0 z-50 bg-black flex flex-col justify-between overflow-hidden select-none"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
+                transition={{ type: "spring", stiffness: 220, damping: 26 }}
+                style={{
+                  paddingTop: "env(safe-area-inset-top, 1rem)",
+                  paddingBottom: "env(safe-area-inset-bottom, 1rem)",
+                  paddingLeft: "env(safe-area-inset-left, 0px)",
+                  paddingRight: "env(safe-area-inset-right, 0px)",
+                }}
               >
-                {/* Header coordinates */}
-                <header className="px-6 py-4 flex items-center justify-between text-white/50 z-10 select-none">
-                  <div className="flex flex-col">
+                {/* Header coordinates (fades out dynamically) */}
+                <header className={`px-6 py-4 flex items-center justify-between text-white/50 z-40 select-none transition-all duration-300 ease-in-out ${
+                  showLightboxUI ? "opacity-100 transform translate-y-0" : "opacity-0 -translate-y-4 pointer-events-none"
+                }`}>
+                  <div className="flex flex-col animate-none">
                     <span className="text-xs font-sans font-semibold tracking-wide text-neutral-200">
-                      სასტაwe
+                      Private Memory
                     </span>
                     <span className="text-[10px] font-mono uppercase text-neutral-500">
                       ავტორი: {activeMediaList[lightboxIndex].author}
                     </span>
                   </div>
-                  <div className="flex items-center space-x-3">
+                  
+                  <div className="flex items-center space-x-2 sm:space-x-3">
+                    {/* Size Selector Mode */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLightboxAspectFill(!lightboxAspectFill);
+                      }}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 hover:text-white rounded-full transition-all text-[11px] font-sans font-medium uppercase tracking-wider border border-white/5"
+                      title={lightboxAspectFill ? "ორიგინალური Fit" : "მთელ ეკრანზე Fill"}
+                    >
+                      {lightboxAspectFill ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+                      <span>{lightboxAspectFill ? "Fit" : "Fill"}</span>
+                    </button>
+
                     <button 
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         const activeItem = activeMediaList[lightboxIndex];
                         handleDownloadImage(activeItem.url, `sastawe-${activeItem.id}`);
                       }}
@@ -1347,7 +1426,10 @@ export default function App() {
                       <Download size={14} />
                     </button>
                     <button 
-                      onClick={() => setLightboxIndex(null)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLightboxIndex(null);
+                      }}
                       className="p-2 bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white rounded-full transition-colors"
                     >
                       <X size={15} />
@@ -1355,16 +1437,24 @@ export default function App() {
                   </div>
                 </header>
 
-                {/* Main image with MANDATORY rounded-none (Sharp) element constraint */}
-                <div className="flex-1 flex items-center justify-center p-4 relative select-none">
+                {/* Main image with spring animation */}
+                <div 
+                  className="flex-1 flex items-center justify-center p-2 sm:p-4 relative select-none w-full h-full"
+                  onClick={() => setShowLightboxUI(!showLightboxUI)}
+                >
                   {/* Invisible left tap-to-navigate zone */}
                   <button 
-                    onClick={handlePrevLightbox}
-                    className="absolute left-0 top-0 bottom-0 w-24 sm:w-32 z-30 cursor-pointer focus:outline-none hover:bg-white/[0.015] active:bg-white/[0.035] transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePrevLightbox();
+                    }}
+                    className="absolute left-0 top-0 bottom-0 w-20 sm:w-28 z-30 cursor-pointer focus:outline-none hover:bg-white/[0.012] active:bg-white/[0.025] transition-colors"
                     aria-label="Previous Image"
                   />
 
-                  <div className="w-full max-w-5xl max-h-[82vh] md:max-h-[85vh] flex items-center justify-center relative bg-black select-none overflow-hidden">
+                  <div className={`w-full h-full max-w-5xl md:max-h-[85vh] flex items-center justify-center relative bg-black select-none overflow-hidden transition-all duration-300 ${
+                    lightboxAspectFill ? "max-h-full" : "max-h-[82vh] rounded-3xl border border-neutral-900/40 shadow-2xl"
+                  }`}>
                     {activeMediaList[lightboxIndex].type === 'video' ? (
                       <motion.div
                         key={`lightbox-video-${lightboxIndex}`}
@@ -1379,13 +1469,18 @@ export default function App() {
                             handlePrevLightbox();
                           }
                         }}
+                        transition={{ type: "spring", stiffness: 220, damping: 26 }}
                         className="w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing"
                       >
                         <video 
                           src={activeMediaList[lightboxIndex].url}
                           controls
                           autoPlay
-                          className="max-w-full max-h-[82vh] md:max-h-[85vh] rounded-none object-contain"
+                          className={`rounded-none transition-all duration-300 ${
+                            lightboxAspectFill 
+                              ? "w-full h-full object-cover" 
+                              : "max-w-full max-h-full object-contain rounded-2xl"
+                          }`}
                         />
                       </motion.div>
                     ) : (
@@ -1428,16 +1523,25 @@ export default function App() {
                         onTouchEnd={() => {
                           touchStartRef.current.dist = 0;
                         }}
-                        onDoubleClick={() => {
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
                           setZoomScale(prev => prev > 1 ? 1 : 2.5);
                         }}
+                        transition={{ type: "spring", stiffness: 220, damping: 26 }}
                         className="w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing select-none"
                       >
-                        <img 
+                        <motion.img 
+                          initial={{ scale: 0.95, opacity: 0.8 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          transition={{ type: "spring", stiffness: 220, damping: 26 }}
                           src={activeMediaList[lightboxIndex].url} 
                           alt="Gallery display" 
                           referrerPolicy="no-referrer"
-                          className="max-w-full max-h-[82vh] md:max-h-[85vh] rounded-none object-contain select-none pointer-events-none"
+                          className={`select-none pointer-events-none transition-all duration-300 ${
+                            lightboxAspectFill 
+                              ? "w-full h-full object-cover" 
+                              : "max-w-full max-h-full object-contain rounded-2xl select-none"
+                          }`}
                         />
                       </motion.div>
                     )}
@@ -1445,14 +1549,19 @@ export default function App() {
 
                   {/* Invisible right tap-to-navigate zone */}
                   <button 
-                    onClick={handleNextLightbox}
-                    className="absolute right-0 top-0 bottom-0 w-24 sm:w-32 z-30 cursor-pointer focus:outline-none hover:bg-white/[0.015] active:bg-white/[0.035] transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleNextLightbox();
+                    }}
+                    className="absolute right-0 top-0 bottom-0 w-20 sm:w-28 z-30 cursor-pointer focus:outline-none hover:bg-white/[0.012] active:bg-white/[0.025] transition-colors"
                     aria-label="Next Image"
                   />
                 </div>
 
                 {/* Footer specs / progress details */}
-                <footer className="py-6 px-6 text-center text-xs font-mono text-neutral-500 tracking-wider z-10 uppercase">
+                <footer className={`py-6 px-6 text-center text-xs font-mono text-neutral-500 tracking-wider z-40 uppercase transition-all duration-300 ease-in-out ${
+                  showLightboxUI ? "opacity-100 transform translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+                }`}>
                   {lightboxIndex + 1} / {activeMediaList.length}
                 </footer>
               </motion.div>
